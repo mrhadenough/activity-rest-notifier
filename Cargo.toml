@@ -1,0 +1,13 @@
+[package]
+name = "app"
+version = "0.1.0"
+authors = ["MrHadEnough <suffering.death@gmail.com>"]
+
+[profile.release]
+panic = 'abort'
+
+[dependencies]
+serde = "1.0.70"
+serde_derive = "1.0.70"
+serde_json = "1.0.24"
+chrono = "0.4.5"
