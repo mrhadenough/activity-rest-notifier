@@ -24,8 +24,9 @@ struct DayActivity {
     is_working: bool,  // either break or work
     is_long_break: bool,  // either a long break or not
     break_time: u32,  // either 5 or 15 minutes related to is_long_break
-    activities_count: u32,  // increase when 25 minutes elapsed
+    break_started_at: Option<String>,  // time when break has started
     breaks_count: u32,  // increase when 5 minutes of idle elapsed
+    activities_count: u32,  // increase when 25 minutes elapsed
     current_activity_time: u32,  // current user activity seconds
     current_idle_time: u32,  // current user idle seconds
     date: String,  // today date
@@ -35,19 +36,23 @@ struct DayActivity {
 
 impl DayActivity {
     fn initial() -> DayActivity {
-        let date = Local::now();
         DayActivity {
             is_working: false,
             is_long_break: false,
             break_time: 5,
+            break_started_at: None,
             activities_count: 0,
             breaks_count: 0,
             current_activity_time: 0,
             current_idle_time: 0,
-            date: date.format("%Y-%m-%dT%H:%M:%S").to_string(),
-            last_updated_at: date.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            date: now_string(),
+            last_updated_at: now_string(),
         }
     }
+}
+
+fn now_string() -> String {
+    Local::now().format("%Y-%m-%dT%H:%M:%S").to_string()
 }
 
 
@@ -123,14 +128,12 @@ fn write_day_activity(day_activity: &DayActivity) {
 
 
 fn increase_idle<'a >(day_activity: &'a mut DayActivity, time: u32) {
-    let date = Local::now();
-    day_activity.last_updated_at = date.format("%Y-%m-%dT%H:%M:%S").to_string();
+    day_activity.last_updated_at = now_string();
     day_activity.current_idle_time += time;
 }
 
 fn increase_activity<'a >(day_activity: &'a mut DayActivity, time: u32) {
-    let date = Local::now();
-    day_activity.last_updated_at = date.format("%Y-%m-%dT%H:%M:%S").to_string();
+    day_activity.last_updated_at = now_string();
     day_activity.current_activity_time += time;
 }
 
@@ -139,14 +142,18 @@ fn monitor_user_activity() {
     let mut day_activity = read_day_activity();
     let delay_time = time::Duration::from_millis(5000);
     day_activity.is_working = true;
+    let mut past_time = Local::now().timestamp();
     loop {
+        let current_time = Local::now().timestamp();
+        let elapsed_time = current_time - past_time;
+        past_time = Local::now().timestamp();
         let idle_time = check_idle_time();
         let is_idle = idle_time >= CHECK_INTERVAL;
 
         if is_idle {
-            increase_idle(&mut day_activity, CHECK_INTERVAL);
+            increase_idle(&mut day_activity, elapsed_time as u32);
         } else {
-            increase_activity(&mut day_activity, CHECK_INTERVAL);
+            increase_activity(&mut day_activity, elapsed_time as u32);
         }
 
         // Working less than 25 minutes
@@ -161,6 +168,7 @@ fn monitor_user_activity() {
                     day_activity.is_working = false;
                     day_activity.current_activity_time = 0;
                     day_activity.activities_count += 1;
+                    day_activity.break_started_at = Some(now_string());
                 } else {
                     // Each 4th break is long
                     day_activity.break_time = if day_activity.activities_count % 4 == 0 {
